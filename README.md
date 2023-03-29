@@ -22,24 +22,113 @@ CREATE TABLE transactions (
 3.	Python script to execute the database initialization:
 
 ```python
+# This program requires the python module psycopg2 to be installed.
+# Install 'python3 -m pip install psycopg2' beforehand
+
 import psycopg2
 
+# create function to create database and establish connection with PostgreSQL
 def create_database_and_tables():
-    conn = psycopg2.connect(database="your_database", user="your_user", password="your_password", host="your_host", port="your_port")
-    cur = conn.cursor()
+    connection = psycopg2.connect(user='postgres', password='MzMxMi1hZmlmc3dh', host='localhost', port="5432", database='transactions')
+    cursor = conn.cursor()
     
-    cur.execute("""
+     SQL = """
     CREATE TABLE IF NOT EXISTS transactions (
         id SERIAL PRIMARY KEY,
         merchant_id INTEGER,
         transaction_date DATE,
         amount NUMERIC(10, 2)
     );
-    """)
-    
-    conn.commit()
-    cur.close()
-    conn.close()
+    """
+    cursor.execute(SQL)
+    print("Table created")
+
+    connection.commit()
+
+    # close connection
+    cursor.close()
+    connection.close()
 
 create_database_and_tables()
 ```
+
+4.	Schema design
+<br>
++-------------------------+</br>
+| credit_card_transactions |</br>
++-------------------------+</br>
+| id SERIAL PRIMARY KEY   |</br>
+| merchant_name TEXT      |</br>
+| transaction_date DATE   |</br>
+| transaction_amount NUM  |</br>
++-------------------------+
+</br>
+<h2>Task 2</h2> 
+1. Raw Data Ingestion Script
+
+```python
+import pandas as pd
+from datetime import datetime
+
+# Load the credit card transactions data
+transactions_df = pd.read_csv('credit_card_transactions-ibm_v2.csv')
+
+# Filter the transactions for data points from 2010 onwards
+transactions_df = transactions_df[transactions_df['Year'] >= 2010]
+
+# Define a function to group the transactions by merchant_id and frequency
+def group_transactions(merchant_id, frequency):
+    # Filter the transactions for the given merchant_id
+    merchant_transactions_df = transactions_df[transactions_df['Merchant Name'] == merchant_id]
+
+    # Convert the 'Year', 'Month', and 'Day' columns to a single datetime column
+    merchant_transactions_df['Date'] = pd.to_datetime(merchant_transactions_df[['Year', 'Month', 'Day']])
+
+    # Group the transactions by the specified frequency
+    if frequency == 'yearly':
+        group_by = pd.Grouper(key='Date', freq='Y')
+        date_format = '%Y'
+    elif frequency == 'monthly':
+        group_by = pd.Grouper(key='Date', freq='M')
+        date_format = '%Y-%m'
+    else:
+        raise ValueError('Invalid frequency. Only "monthly" and "yearly" are allowed.')
+
+    grouped_transactions = merchant_transactions_df.groupby(group_by)
+
+    # Aggregate the transaction count and total amount for each group
+    total_transactions = {}
+    total_amount = {}
+    for name, group in grouped_transactions:
+        date_str = name.strftime(date_format)
+        total_transactions[date_str] = len(group)
+        total_amount[date_str] = group['Amount'].sum()
+
+    # Return the result as a dictionary
+    result = {
+        'merchant_id': merchant_id,
+        'data': {
+            'total_transactions': total_transactions,
+            'total_amount': total_amount
+        }
+    }
+
+    return result
+```
+
+<h2>Task 3</h2> 
+1. SQL Query Script
+
+```sql
+SELECT merchant_id,
+       CASE 
+           WHEN frequency = 'monthly' THEN to_char(transaction_date, 'YYYY-MM') 
+           WHEN frequency = 'yearly' THEN to_char(transaction_date, 'YYYY') 
+       END AS date_group,
+       COUNT(*) AS total_transactions,
+       SUM(amount) AS total_amount
+FROM credit_card_transactions
+WHERE merchant_name = 'merchant_name' AND transaction_date >= '2010-01-01'
+GROUP BY merchant_id, date_group
+ORDER BY date_group
+
