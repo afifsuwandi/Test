@@ -27,10 +27,19 @@ CREATE TABLE transactions (
 
 import psycopg2
 
-# create function to create database and establish connection with PostgreSQL
+# establish connection to default postgres database
+conn = psycopg2.connect(user='postgres', password='password', host='localhost', port='5432')
+
+# create a new database
+cur = conn.cursor()
+cur.execute("CREATE DATABASE credit_transactions")
+cur.close()
+conn.close()
+
+# create function to establish connection to new database
 def create_database_and_tables():
-    connection = psycopg2.connect(user='postgres', password='MzMxMi1hZmlmc3dh', host='localhost', port="5432", database='transactions')
-    cursor = conn.cursor()
+    conn = psycopg2.connect(user='postgres', password='password', host='localhost', port='5432', database='credit_transactions')
+    cur = conn.cursor()
     
      SQL = """
     CREATE TABLE IF NOT EXISTS transactions (
@@ -40,14 +49,14 @@ def create_database_and_tables():
         amount NUMERIC(10, 2)
     );
     """
-    cursor.execute(SQL)
+    cur.execute(SQL)
     print("Table created")
 
-    connection.commit()
+    conn.commit()
 
     # close connection
-    cursor.close()
-    connection.close()
+    cur.close()
+    conn.close()
 
 create_database_and_tables()
 ```
@@ -58,9 +67,9 @@ create_database_and_tables()
 |------transactions-------|</br>
 +-------------------------+</br>
 | id SERIAL PRIMARY KEY   |</br>
-| merchant_name TEXT      |</br>
-| transaction_date DATE   |</br>
-| transaction_amount NUM  |</br>
+| merchant_id INTEGER--|</br>
+| transaction_date DATE--|</br>
+| amount (NUMERIC(10,2)) -|</br>
 +-------------------------+
 </br>
 <h2>Task 2</h2> 
