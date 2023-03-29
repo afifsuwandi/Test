@@ -55,7 +55,7 @@ create_database_and_tables()
 4.	Schema design
 <br>
 +-------------------------+</br>
-| credit_card_transactions |</br>
+|------transactions-------|</br>
 +-------------------------+</br>
 | id SERIAL PRIMARY KEY   |</br>
 | merchant_name TEXT      |</br>
@@ -112,8 +112,46 @@ def group_transactions(merchant_id, frequency):
             'total_amount': total_amount
         }
     }
-
+    
     return result
+    
+    # Check for the last ingestion timestamp
+    cur = conn.cursor()
+    cur.execute("SELECT MAX(ingestion_timestamp) FROM transactions")
+    last_ingestion_timestamp = cur.fetchone()[0]
+    
+    # Filter for new records
+    if last_ingestion_timestamp is None:
+        new_df = df
+    else:
+        last_timestamp = datetime.strptime(last_ingestion_timestamp, "%Y-%m-%d %H:%M:%S.%f").replace(tzinfo=timezone.utc)
+        new_df = df[df.timestamp > last_timestamp]
+        
+    # Ingest new records into the database
+    if not new_df.empty:
+        for i, row in new_df.iterrows():
+            cur.execute("""
+                INSERT INTO transactions
+                (user_id, transaction_timestamp, amount, merchant_name, merchant_city, merchant_state, zip, mcc, errors, is_fraud, ingestion_timestamp)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (
+                row["User"],
+                datetime.strptime(f"{row['Year']}-{row['Month']}-{row['Day']} {row['Time']}", "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc),
+                row["Amount"],
+                row["Merchant Name"],
+                row["Merchant City"],
+                row["Merchant State"],
+                row["Zip"],
+                row["MCC"],
+                row["Errors?"],
+                row["is Fraud?"],
+                datetime.now(timezone.utc)
+            ))
+
+        conn.commit()
+        print(f"{len(new_df)} new records ingested.")
+    else:
+        print("No new records to ingest.")
 ```
 
 <h2>Task 3</h2> 
